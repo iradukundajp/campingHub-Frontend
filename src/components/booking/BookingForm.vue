@@ -3,12 +3,13 @@
     <!-- Authentication Check -->
     <div v-if="!authStore.isAuthenticated" class="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
       <p class="text-blue-800 text-sm mb-3">Sign in to book this camping spot</p>
-      <router-link 
-        to="/login" 
-        class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
+      <button 
+        type="button"
+        @click="showAuthModal"
+        class="bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
       >
         Sign In
-      </router-link>
+      </button>
     </div>
 
     <!-- Booking Form -->
@@ -16,6 +17,11 @@
       <!-- Error Message -->
       <div v-if="error" class="bg-red-50 border border-red-200 rounded-lg p-3">
         <p class="text-red-800 text-sm">{{ error }}</p>
+      </div>
+
+      <!-- Success Message -->
+      <div v-if="successMessage" class="bg-green-50 border border-green-200 rounded-lg p-3">
+        <p class="text-green-800 text-sm">{{ successMessage }}</p>
       </div>
 
       <!-- Check-in Date -->
@@ -26,7 +32,7 @@
           type="date"
           :min="minDate"
           required
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
           @change="validateDates"
         >
       </div>
@@ -39,7 +45,7 @@
           type="date"
           :min="form.checkIn || minDate"
           required
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
           @change="validateDates"
         >
       </div>
@@ -50,7 +56,7 @@
         <select
           v-model="form.guests"
           required
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
         >
           <option value="">Select guests</option>
           <option 
@@ -69,7 +75,7 @@
         <textarea
           v-model="form.notes"
           rows="3"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
           placeholder="Any special requests or notes..."
         ></textarea>
       </div>
@@ -82,7 +88,7 @@
             <span class="text-gray-900">${{ subtotal.toFixed(2) }}</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-gray-600">Service fee</span>
+            <span class="text-gray-600">Service fee (5%)</span>
             <span class="text-gray-900">${{ serviceFee.toFixed(2) }}</span>
           </div>
           <div class="border-t border-gray-200 pt-2 flex justify-between font-semibold">
@@ -101,7 +107,7 @@
       <button
         type="submit"
         :disabled="!canBook || loading"
-        class="w-full bg-primary text-white py-3 px-4 rounded-lg font-semibold hover:bg-primary-dark disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+        class="w-full bg-green-500 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
       >
         <span v-if="loading" class="flex items-center justify-center">
           <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
@@ -142,9 +148,11 @@ const props = defineProps({
 const emit = defineEmits(['booking-success'])
 
 const authStore = useAuthStore()
+const router = useRouter()
 
 const loading = ref(false)
 const error = ref('')
+const successMessage = ref('')
 const availabilityMessage = ref('')
 
 const form = ref({
@@ -189,7 +197,7 @@ const isInstantBook = computed(() => {
 })
 
 const availabilityClass = computed(() => {
-  if (availabilityMessage.value.includes('available')) {
+  if (availabilityMessage.value.includes('Available')) {
     return 'bg-green-50 border border-green-200 text-green-800'
   } else if (availabilityMessage.value.includes('not available')) {
     return 'bg-red-50 border border-red-200 text-red-800'
@@ -200,12 +208,19 @@ const availabilityClass = computed(() => {
 const canBook = computed(() => {
   return isFormValid.value && 
          !loading.value && 
-         availabilityMessage.value.includes('available')
+         (availabilityMessage.value.includes('Available') || !availabilityMessage.value)
 })
 
+const showAuthModal = () => {
+  // Navigate to home page where auth modal can be opened
+  router.push('/')
+}
+
 const validateDates = async () => {
+  error.value = ''
+  availabilityMessage.value = ''
+  
   if (!isFormValid.value) {
-    availabilityMessage.value = ''
     return
   }
 
@@ -213,11 +228,14 @@ const validateDates = async () => {
   const checkIn = new Date(form.value.checkIn)
   const checkOut = new Date(form.value.checkOut)
 
-  const hasConflict = props.unavailableDates.some(period => {
-    const periodStart = new Date(period.start)
-    const periodEnd = new Date(period.end)
-    
-    return (checkIn < periodEnd && checkOut > periodStart)
+  // Convert unavailable dates to proper format
+  const unavailablePeriods = props.unavailableDates.map(period => ({
+    start: new Date(period.checkIn || period.start),
+    end: new Date(period.checkOut || period.end)
+  }))
+
+  const hasConflict = unavailablePeriods.some(period => {
+    return (checkIn < period.end && checkOut > period.start)
   })
 
   if (hasConflict) {
@@ -225,17 +243,23 @@ const validateDates = async () => {
     return
   }
 
-  // Check with API for real-time availability
-  try {
-    await api.getSpotAvailability(props.spot.id, {
-      startDate: form.value.checkIn,
-      endDate: form.value.checkOut
-    })
-    
-    availabilityMessage.value = `Available for ${totalNights.value} ${totalNights.value === 1 ? 'night' : 'nights'}`
-  } catch (err) {
-    availabilityMessage.value = 'These dates are not available. Please choose different dates.'
+  // Check if check-in is not in the past
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  if (checkIn < today) {
+    availabilityMessage.value = 'Check-in date cannot be in the past.'
+    return
   }
+
+  // Check if dates are too far in advance (optional - 1 year limit)
+  const oneYearFromNow = new Date()
+  oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
+  if (checkIn > oneYearFromNow) {
+    availabilityMessage.value = 'Bookings can only be made up to 1 year in advance.'
+    return
+  }
+
+  availabilityMessage.value = `Available for ${totalNights.value} ${totalNights.value === 1 ? 'night' : 'nights'}`
 }
 
 const handleSubmit = async () => {
@@ -243,6 +267,7 @@ const handleSubmit = async () => {
 
   loading.value = true
   error.value = ''
+  successMessage.value = ''
 
   try {
     const bookingData = {
@@ -253,13 +278,39 @@ const handleSubmit = async () => {
       notes: form.value.notes?.trim() || null
     }
 
-    await api.createBooking(bookingData)
+    console.log('Creating booking with data:', bookingData)
+
+    const response = await api.createBooking(bookingData)
     
-    // Emit success event
-    emit('booking-success')
+    console.log('Booking created successfully:', response.data)
+    
+    successMessage.value = response.data.message || 'Booking created successfully!'
+    
+    // Clear form
+    form.value = {
+      checkIn: '',
+      checkOut: '',
+      guests: '',
+      notes: ''
+    }
+    
+    // Emit success event after a short delay
+    setTimeout(() => {
+      emit('booking-success', response.data.booking)
+    }, 1500)
     
   } catch (err) {
-    error.value = err.response?.data?.message || 'Failed to create booking. Please try again.'
+    console.error('Booking creation failed:', err)
+    const errorMessage = err.response?.data?.message || 'Failed to create booking. Please try again.'
+    error.value = errorMessage
+    
+    // Scroll to error message
+    setTimeout(() => {
+      const errorElement = document.querySelector('.bg-red-50')
+      if (errorElement) {
+        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 100)
   } finally {
     loading.value = false
   }
@@ -273,4 +324,21 @@ watch([() => form.value.checkIn, () => form.value.checkOut], () => {
     availabilityMessage.value = ''
   }
 }, { deep: true })
+
+// Clear messages after some time
+watch(successMessage, (newVal) => {
+  if (newVal) {
+    setTimeout(() => {
+      successMessage.value = ''
+    }, 5000)
+  }
+})
+
+watch(error, (newVal) => {
+  if (newVal) {
+    setTimeout(() => {
+      error.value = ''
+    }, 8000)
+  }
+})
 </script>

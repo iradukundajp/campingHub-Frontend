@@ -30,7 +30,7 @@
       <div class="max-w-7xl mx-auto px-6">
         <div class="flex justify-between items-center">
           <!-- Logo -->
-          <div class="flex items-center space-x-3 cursor-pointer group">
+          <div class="flex items-center space-x-3 cursor-pointer group" @click="$router.push('/')">
             <div class="text-3xl group-hover:scale-110 transition-transform duration-300">🏕️</div>
             <span 
               class="text-2xl font-bold transition-all duration-300"
@@ -42,7 +42,8 @@
           
           <!-- Navigation Links -->
           <div class="hidden md:flex items-center space-x-8">
-            <a href="#" 
+            <router-link 
+              to="/spots"
                :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
                class="transition-colors duration-300 relative group">
               Explore
@@ -50,8 +51,9 @@
                 :class="scrolled ? 'bg-green-600' : 'bg-green-300'"
                 class="absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full"
               ></span>
-            </a>
-            <a href="#" 
+            </router-link>
+            <router-link 
+              to="/spots"
                :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
                class="transition-colors duration-300 relative group">
               Experiences
@@ -59,8 +61,9 @@
                 :class="scrolled ? 'bg-green-600' : 'bg-green-300'"
                 class="absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full"
               ></span>
-            </a>
-            <a href="#" 
+            </router-link>
+            <button 
+              @click="handleHostClick"
                :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
                class="transition-colors duration-300 relative group">
               Host
@@ -68,21 +71,61 @@
                 :class="scrolled ? 'bg-green-600' : 'bg-green-300'"
                 class="absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full"
               ></span>
-            </a>
+            </button>
           </div>
           
           <!-- User Menu -->
-          <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-4" v-if="!authStore.isAuthenticated">
             <button 
               @click="openLoginModal"
               :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
               class="hidden md:block transition-colors duration-300 font-medium">
-              Become a host
+              Sign In
             </button>
             <button 
               @click="openSignupModal"
               class="bg-gradient-to-r from-green-500 to-teal-500 text-white px-6 py-2.5 rounded-full hover:from-green-600 hover:to-teal-600 transition-all duration-300 transform hover:scale-105 hover:shadow-lg font-medium">
               Sign Up
+            </button>
+          </div>
+          
+          <!-- Authenticated User Menu -->
+          <div class="flex items-center space-x-4" v-else>
+            <!-- FIXED: Restored bookings link -->
+            <router-link 
+              to="/bookings"
+              :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
+              class="hidden md:block transition-colors duration-300 font-medium">
+              My Bookings
+            </router-link>
+            
+            <!-- FIXED: Conditional admin/owner links -->
+            <router-link 
+              v-if="authStore.isAdmin"
+              to="/admin"
+              :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
+              class="hidden md:block transition-colors duration-300 font-medium">
+              Admin Panel
+            </router-link>
+            
+            <router-link 
+              v-else-if="authStore.isOwner"
+              to="/owner"
+              :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
+              class="hidden md:block transition-colors duration-300 font-medium">
+              My Spots
+            </router-link>
+            
+            <router-link 
+              to="/profile"
+              :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
+              class="hidden md:block transition-colors duration-300 font-medium">
+              Profile
+            </router-link>
+            <button 
+              @click="authStore.logout"
+              class="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-2.5 rounded-full hover:from-red-600 hover:to-red-700 transition-all duration-300 transform hover:scale-105 hover:shadow-lg font-medium">
+              Sign Out
             </button>
           </div>
         </div>
@@ -130,9 +173,9 @@
               <input 
                 ref="checkinInput"
                 v-model="searchData.checkin"
-                type="text" 
-                placeholder="Add dates"
+                type="date" 
                 class="w-full bg-transparent text-gray-600 placeholder-gray-400 border-none outline-none text-sm"
+                :min="minDate"
               >
             </div>
             
@@ -144,9 +187,9 @@
               <input 
                 ref="checkoutInput"
                 v-model="searchData.checkout"
-                type="text" 
-                placeholder="Add dates"
+                type="date" 
                 class="w-full bg-transparent text-gray-600 placeholder-gray-400 border-none outline-none text-sm"
+                :min="searchData.checkin || minDate"
               >
             </div>
             
@@ -159,7 +202,9 @@
                 <input 
                   ref="guestsInput"
                   v-model="searchData.guests"
-                  type="text" 
+                  type="number" 
+                  min="1"
+                  max="50"
                   placeholder="Add guests"
                   class="w-full bg-transparent text-gray-600 placeholder-gray-400 border-none outline-none text-sm"
                 >
@@ -217,7 +262,20 @@
           <p class="text-lg text-gray-600">Handpicked locations for unforgettable outdoor adventures</p>
         </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <!-- Loading State -->
+        <div v-if="loadingSpots" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div v-for="i in 6" :key="i" class="bg-white/60 backdrop-blur-lg rounded-3xl overflow-hidden animate-pulse">
+            <div class="h-56 bg-gray-300"></div>
+            <div class="p-6">
+              <div class="h-4 bg-gray-300 rounded mb-2"></div>
+              <div class="h-3 bg-gray-200 rounded mb-4"></div>
+              <div class="h-4 bg-gray-300 rounded w-1/2"></div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Featured Spots -->
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           <div 
             v-for="spot in featuredSpots" 
             :key="spot.id"
@@ -244,13 +302,19 @@
             
             <!-- Image -->
             <div class="relative h-56 overflow-hidden">
+              <img 
+                v-if="spot.images && spot.images.length > 0"
+                :src="spot.images[0]" 
+                :alt="spot.title"
+                class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              >
               <div 
-                class="w-full h-full bg-gradient-to-br transition-transform duration-700 group-hover:scale-110"
-                :style="{ background: spot.gradient }"
+                v-else
+                class="w-full h-full bg-gradient-to-br from-green-400 to-blue-500 transition-transform duration-700 group-hover:scale-110"
               ></div>
               <div class="absolute bottom-4 left-4">
                 <span class="bg-black/50 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
-                  {{ spot.type }}
+                  {{ getCategoryForSpot(spot) }}
                 </span>
               </div>
             </div>
@@ -259,13 +323,13 @@
             <div class="p-6">
               <div class="flex justify-between items-start mb-3">
                 <h3 class="text-lg font-semibold text-gray-800 group-hover:text-green-600 transition-colors duration-300">
-                  {{ spot.name }}
+                  {{ spot.title }}
                 </h3>
                 <div class="flex items-center space-x-1">
                   <svg class="w-4 h-4 text-yellow-400 fill-current" viewBox="0 0 20 20">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
                   </svg>
-                  <span class="text-sm text-gray-600 font-medium">{{ spot.rating }}</span>
+                  <span class="text-sm text-gray-600 font-medium">{{ spot.averageRating || 0 }}</span>
                 </div>
               </div>
               
@@ -273,7 +337,7 @@
               
               <div class="flex justify-between items-center">
                 <div>
-                  <span class="text-xl font-bold text-gray-800">€{{ spot.price }}</span>
+                  <span class="text-xl font-bold text-gray-800">€{{ formatPrice(spot.price) }}</span>
                   <span class="text-gray-500 text-sm"> / night</span>
                 </div>
                 <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">
@@ -283,33 +347,23 @@
             </div>
           </div>
         </div>
+        
+        <!-- View All Button -->
+        <div class="text-center mt-12">
+          <router-link 
+            to="/spots"
+            class="inline-block bg-gradient-to-r from-green-500 to-teal-500 text-white px-8 py-3 rounded-full hover:from-green-600 hover:to-teal-600 transition-all duration-300 transform hover:scale-105 hover:shadow-lg font-medium"
+          >
+            View All Camping Spots
+          </router-link>
+        </div>
       </div>
     </section>
 
     <!-- Login/Signup Modal -->
     <div 
       v-if="showModal"
-      class="fixed inset-0 z-[9999]
-
-// Computed properties
-const passwordStrength = computed(() => {
-  const password = signupForm.value.password
-  if (!password) return 0
-  
-  let strength = 0
-  if (password.length >= 8) strength++
-  if (/[A-Z]/.test(password)) strength++
-  if (/[0-9]/.test(password)) strength++
-  if (/[^A-Za-z0-9]/.test(password)) strength++
-  
-  return strength
-})
-
-const passwordStrengthText = computed(() => {
-  const strength = passwordStrength.value
-  const texts = ['Very Weak', 'Weak', 'Good', 'Strong', 'Very Strong']
-  return texts[strength] || 'Very Weak'
-}) flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       @click="closeModal"
     >
       <div 
@@ -331,6 +385,11 @@ const passwordStrengthText = computed(() => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
               </svg>
             </button>
+          </div>
+
+          <!-- Error Message -->
+          <div v-if="authError" class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {{ authError }}
           </div>
 
           <!-- Login Form -->
@@ -572,6 +631,18 @@ const passwordStrengthText = computed(() => {
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import api from '@/services/api'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+// Template refs for Vue 3 Composition API
+const locationInput = ref(null)
+const checkinInput = ref(null)
+const checkoutInput = ref(null)
+const guestsInput = ref(null)
 
 // Reactive data
 const scrolled = ref(false)
@@ -579,7 +650,9 @@ const mouseX = ref(0)
 const mouseY = ref(0)
 const selectedCategory = ref('')
 const isSearching = ref(false)
-const likedSpots = ref([])
+const likedSpots = ref(JSON.parse(localStorage.getItem('likedSpots') || '[]'))
+const loadingSpots = ref(true)
+const featuredSpots = ref([])
 
 // Modal and Auth state
 const showModal = ref(false)
@@ -589,6 +662,7 @@ const isLoggingIn = ref(false)
 const isSigningUp = ref(false)
 const showLoginPassword = ref(false)
 const showSignupPassword = ref(false)
+const authError = ref('')
 
 // Form data
 const loginForm = ref({
@@ -603,7 +677,8 @@ const signupForm = ref({
   email: '',
   password: '',
   confirmPassword: '',
-  agreeTerms: false
+  agreeTerms: false,
+  role: 'USER'
 })
 
 // Form errors
@@ -629,63 +704,29 @@ const categories = [
   { name: 'Adventure', icon: '🎒' }
 ]
 
-// Featured spots with gradients
-const featuredSpots = [
-  {
-    id: 1,
-    name: 'Forest Haven Retreat',
-    location: 'Ardennes Forest, Belgium',
-    price: 45,
-    rating: 4.9,
-    type: 'Forest Camping',
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-  },
-  {
-    id: 2,
-    name: 'Lakeside Paradise',
-    location: 'Lake Genval, Belgium',
-    price: 38,
-    rating: 4.8,
-    type: 'Lakeside',
-    gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
-  },
-  {
-    id: 3,
-    name: 'Mountain View Camp',
-    location: 'High Fens, Belgium',
-    price: 52,
-    rating: 4.7,
-    type: 'Mountain',
-    gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
-  },
-  {
-    id: 4,
-    name: 'Coastal Escape',
-    location: 'North Sea Coast, Belgium',
-    price: 60,
-    rating: 4.9,
-    type: 'Beach',
-    gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
-  },
-  {
-    id: 5,
-    name: 'Wildlife Sanctuary',
-    location: 'Hoge Kempen National Park',
-    price: 42,
-    rating: 4.8,
-    type: 'Nature Reserve',
-    gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
-  },
-  {
-    id: 6,
-    name: 'Historic Grounds',
-    location: 'Bruges Countryside',
-    price: 48,
-    rating: 4.6,
-    type: 'Historic',
-    gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)'
-  }
-]
+// Computed properties
+const minDate = computed(() => {
+  return new Date().toISOString().split('T')[0]
+})
+
+const passwordStrength = computed(() => {
+  const password = signupForm.value.password
+  if (!password) return 0
+  
+  let strength = 0
+  if (password.length >= 8) strength++
+  if (/[A-Z]/.test(password)) strength++
+  if (/[0-9]/.test(password)) strength++
+  if (/[^A-Za-z0-9]/.test(password)) strength++
+  
+  return strength
+})
+
+const passwordStrengthText = computed(() => {
+  const strength = passwordStrength.value
+  const texts = ['Very Weak', 'Weak', 'Good', 'Strong', 'Very Strong']
+  return texts[strength] || 'Very Weak'
+})
 
 // Methods
 const handleScroll = () => {
@@ -697,10 +738,60 @@ const handleMouseMove = (e) => {
   mouseY.value = (e.clientY - window.innerHeight / 2) / 50
 }
 
+// Load featured spots from backend
+const loadFeaturedSpots = async () => {
+  try {
+    loadingSpots.value = true
+    const response = await api.getSpots({ limit: 6, sortBy: 'averageRating', sortOrder: 'desc' })
+    
+    if (response.data && response.data.spots) {
+      featuredSpots.value = response.data.spots
+    }
+  } catch (error) {
+    console.error('Error loading featured spots:', error)
+    featuredSpots.value = []
+  } finally {
+    loadingSpots.value = false
+  }
+}
+
+// Helper functions
+const formatPrice = (price) => {
+  return parseFloat(price).toFixed(2)
+}
+
+const getCategoryForSpot = (spot) => {
+  if (spot.amenities && spot.amenities.length > 0) {
+    const amenityStr = spot.amenities.join(' ').toLowerCase()
+    if (amenityStr.includes('forest') || amenityStr.includes('hiking')) return 'Forest Camping'
+    if (amenityStr.includes('lake') || amenityStr.includes('water')) return 'Lakeside'
+    if (amenityStr.includes('beach') || amenityStr.includes('coast')) return 'Beach'
+    if (amenityStr.includes('mountain') || amenityStr.includes('hill')) return 'Mountain'
+    if (amenityStr.includes('glamping') || amenityStr.includes('luxury')) return 'Glamping'
+  }
+  return 'Camping'
+}
+
+// FIXED: Handle host click - separate admin and owner routing
+const handleHostClick = () => {
+  if (authStore.isAuthenticated) {
+    if (authStore.isAdmin) {
+      router.push('/admin')
+    } else if (authStore.isOwner) {
+      router.push('/owner')
+    } else {
+      alert('Contact us to become a camping spot owner!')
+    }
+  } else {
+    openSignupModal()
+  }
+}
+
 // Modal methods
 const openSignupModal = () => {
   showModal.value = true
   isLogin.value = false
+  authError.value = ''
   setTimeout(() => {
     modalAnimation.value = true
   }, 10)
@@ -709,6 +800,7 @@ const openSignupModal = () => {
 const openLoginModal = () => {
   showModal.value = true
   isLogin.value = true
+  authError.value = ''
   setTimeout(() => {
     modalAnimation.value = true
   }, 10)
@@ -724,12 +816,13 @@ const closeModal = () => {
 
 const toggleAuthMode = () => {
   isLogin.value = !isLogin.value
+  authError.value = ''
   resetForms()
 }
 
 const resetForms = () => {
   loginForm.value = { email: '', password: '', remember: false }
-  signupForm.value = { firstName: '', lastName: '', email: '', password: '', confirmPassword: '', agreeTerms: false }
+  signupForm.value = { firstName: '', lastName: '', email: '', password: '', confirmPassword: '', agreeTerms: false, role: 'USER' }
   loginErrors.value = {}
   signupErrors.value = {}
   showLoginPassword.value = false
@@ -775,8 +868,8 @@ const validateSignupForm = () => {
   
   if (!signupForm.value.password) {
     errors.password = 'Password is required'
-  } else if (signupForm.value.password.length < 8) {
-    errors.password = 'Password must be at least 8 characters'
+  } else if (signupForm.value.password.length < 6) {
+    errors.password = 'Password must be at least 6 characters'
   }
   
   if (!signupForm.value.confirmPassword) {
@@ -798,26 +891,26 @@ const handleLogin = async () => {
   if (!validateLoginForm()) return
   
   isLoggingIn.value = true
+  authError.value = ''
   
   try {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    const result = await authStore.login({
+      email: loginForm.value.email,
+      password: loginForm.value.password
+    })
     
-    // For demo purposes, just log the form data
-    console.log('Login successful:', loginForm.value)
-    
-    // Here you would typically:
-    // 1. Send login request to your backend
-    // 2. Store JWT token
-    // 3. Update user state
-    // 4. Redirect user
-    
-    alert(`Welcome back! Logged in as ${loginForm.value.email}`)
-    closeModal()
+    if (result.success) {
+      closeModal()
+      setTimeout(() => {
+        alert(`Welcome back, ${authStore.user.firstName}!`)
+      }, 500)
+    } else {
+      authError.value = result.error
+    }
     
   } catch (error) {
     console.error('Login failed:', error)
-    loginErrors.value.general = 'Login failed. Please try again.'
+    authError.value = 'Login failed. Please try again.'
   } finally {
     isLoggingIn.value = false
   }
@@ -827,65 +920,91 @@ const handleSignup = async () => {
   if (!validateSignupForm()) return
   
   isSigningUp.value = true
+  authError.value = ''
   
   try {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    const result = await authStore.register({
+      firstName: signupForm.value.firstName,
+      lastName: signupForm.value.lastName,
+      email: signupForm.value.email,
+      password: signupForm.value.password,
+      role: signupForm.value.role
+    })
     
-    // For demo purposes, just log the form data
-    console.log('Signup successful:', signupForm.value)
-    
-    // Here you would typically:
-    // 1. Send signup request to your backend
-    // 2. Send verification email
-    // 3. Store JWT token
-    // 4. Update user state
-    // 5. Redirect user
-    
-    alert(`Account created successfully! Welcome ${signupForm.value.firstName}!`)
-    closeModal()
+    if (result.success) {
+      closeModal()
+      setTimeout(() => {
+        alert(`Welcome to CampingHub, ${authStore.user.firstName}!`)
+      }, 500)
+    } else {
+      authError.value = result.error
+    }
     
   } catch (error) {
     console.error('Signup failed:', error)
-    signupErrors.value.general = 'Signup failed. Please try again.'
+    authError.value = 'Registration failed. Please try again.'
   } finally {
     isSigningUp.value = false
   }
 }
 
 const loginWithGoogle = () => {
-  console.log('Login with Google')
-  // Here you would integrate with Google OAuth
-  alert('Google login would be implemented here')
+  alert('Google login coming soon!')
 }
 
 const loginWithFacebook = () => {
-  console.log('Login with Facebook')
-  // Here you would integrate with Facebook OAuth
-  alert('Facebook login would be implemented here')
+  alert('Facebook login coming soon!')
 }
 
+// Search and navigation methods
 const focusField = (field) => {
-  const inputs = {
-    location: 'locationInput',
-    checkin: 'checkinInput',
-    checkout: 'checkoutInput',
-    guests: 'guestsInput'
+  const inputRefs = {
+    location: locationInput,
+    checkin: checkinInput,
+    checkout: checkoutInput,
+    guests: guestsInput
   }
-  // Focus would work with refs in a real component
-  console.log(`Focus ${field}`)
+  
+  // Focus the specific input using template refs
+  const inputRef = inputRefs[field]
+  if (inputRef && inputRef.value) {
+    inputRef.value.focus()
+  }
 }
 
 const selectCategory = (category) => {
   selectedCategory.value = selectedCategory.value === category ? '' : category
+  
+  if (selectedCategory.value) {
+    router.push({
+      path: '/spots',
+      query: { category: selectedCategory.value }
+    })
+  }
 }
 
 const handleSearch = () => {
+  if (!searchData.value.location && !searchData.value.checkin && !searchData.value.checkout && !searchData.value.guests) {
+    router.push('/spots')
+    return
+  }
+
   isSearching.value = true
+  
+  // Build search query
+  const query = {}
+  if (searchData.value.location) query.search = searchData.value.location
+  if (searchData.value.checkin) query.checkIn = searchData.value.checkin
+  if (searchData.value.checkout) query.checkOut = searchData.value.checkout
+  if (searchData.value.guests) query.capacity = searchData.value.guests
+  
   setTimeout(() => {
     isSearching.value = false
-    console.log('Search completed:', searchData.value)
-  }, 2000)
+    router.push({
+      path: '/spots',
+      query
+    })
+  }, 500)
 }
 
 const toggleHeart = (id) => {
@@ -895,10 +1014,12 @@ const toggleHeart = (id) => {
   } else {
     likedSpots.value.push(id)
   }
+  
+  localStorage.setItem('likedSpots', JSON.stringify(likedSpots.value))
 }
 
 const viewSpot = (id) => {
-  console.log('Viewing spot:', id)
+  router.push(`/spots/${id}`)
 }
 
 // Lifecycle
@@ -906,6 +1027,8 @@ onMounted(() => {
   window.addEventListener('scroll', handleScroll)
   window.addEventListener('mousemove', handleMouseMove)
   window.addEventListener('keydown', handleKeydown)
+  
+  loadFeaturedSpots()
 })
 
 onUnmounted(() => {
