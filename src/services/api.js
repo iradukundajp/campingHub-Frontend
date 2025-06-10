@@ -100,57 +100,148 @@ const clearAuthToken = () => {
 
 // API methods
 export default {
-  // Auth endpoints - FIXED: Consistent endpoints
+  // ===== AUTHENTICATION ENDPOINTS =====
   login: (credentials) => apiCall('POST', '/auth/login', credentials),
   register: (userData) => apiCall('POST', '/auth/register', userData),
   getCurrentUser: () => apiCall('GET', '/auth/me'),
   updateProfile: (profileData) => apiCall('PUT', '/auth/profile', profileData),
 
-  // User profile endpoints
+  // ===== USER ENDPOINTS =====
   getProfile: () => apiCall('GET', '/users/profile'),
-  getUserBookings: () => apiCall('GET', '/users/bookings'),
+  updateUserProfile: (profileData) => apiCall('PUT', '/users/profile', profileData),
+  getUserBookings: (params = {}) => apiCall('GET', '/users/bookings', null, { params }),
+  getUserReviews: (params = {}) => apiCall('GET', '/users/reviews', null, { params }),
+  getUserStats: () => apiCall('GET', '/users/stats'),
+  requestVerification: () => apiCall('PUT', '/users/verification'),
+  deleteAccount: (data) => apiCall('DELETE', '/users/account', data),
 
-  // Camping spots endpoints
+  // ===== CAMPING SPOTS ENDPOINTS =====
   getSpots: (params = {}) => apiCall('GET', '/spots', null, { params }),
   getSpot: (id) => apiCall('GET', `/spots/${id}`),
   createSpot: (spotData) => apiCall('POST', '/spots', spotData),
   updateSpot: (id, spotData) => apiCall('PUT', `/spots/${id}`, spotData),
   deleteSpot: (id) => apiCall('DELETE', `/spots/${id}`),
 
-  // Owner endpoints
-  getOwnerSpots: () => apiCall('GET', '/owners/spots'),
-  getOwnerBookings: () => apiCall('GET', '/owners/bookings'),
-
-  // Booking endpoints
-  getBookings: () => apiCall('GET', '/bookings'),
+  // ===== BOOKING ENDPOINTS =====
+  getBookings: (params = {}) => apiCall('GET', '/bookings', null, { params }),
   getBooking: (id) => apiCall('GET', `/bookings/${id}`),
   createBooking: (bookingData) => apiCall('POST', '/bookings', bookingData),
-  updateBooking: (id, bookingData) => apiCall('PUT', `/bookings/${id}`, bookingData),
   cancelBooking: (id, reason = '') => apiCall('PUT', `/bookings/${id}/cancel`, { reason }),
+  updatePaymentStatus: (id, paymentData) => apiCall('PUT', `/bookings/${id}/payment`, paymentData),
+  addReview: (bookingId, reviewData) => apiCall('POST', `/bookings/${bookingId}/review`, reviewData),
 
-  // Review endpoints
-  getSpotReviews: (spotId, params = {}) => apiCall('GET', `/spots/${spotId}/reviews`, null, { params }),
-  createReview: (bookingId, reviewData) => apiCall('POST', `/bookings/${bookingId}/review`, reviewData),
+  // ===== OWNER ENDPOINTS =====
+  getOwnerSpots: (params = {}) => apiCall('GET', '/owners/spots', null, { params }),
+  createOwnerSpot: (spotData) => apiCall('POST', '/owners/spots', spotData),
+  updateOwnerSpot: (id, spotData) => apiCall('PUT', `/owners/spots/${id}`, spotData),
+  deleteOwnerSpot: (id) => apiCall('DELETE', `/owners/spots/${id}`),
+  getOwnerBookings: (params = {}) => apiCall('GET', '/owners/bookings', null, { params }),
+  updateOwnerBooking: (id, bookingData) => apiCall('PUT', `/owners/bookings/${id}`, bookingData),
+  getOwnerDashboard: () => apiCall('GET', '/owners/dashboard'),
 
-  // Admin endpoints
+  // ===== ADMIN ENDPOINTS =====
   getAdminDashboard: () => apiCall('GET', '/admin/dashboard'),
+  
+  // Admin Users
   getAdminUsers: (params = {}) => apiCall('GET', '/admin/users', null, { params }),
   updateAdminUser: (id, userData) => apiCall('PUT', `/admin/users/${id}`, userData),
   deleteAdminUser: (id) => apiCall('DELETE', `/admin/users/${id}`),
+  
+  // Admin Spots
   getAdminSpots: (params = {}) => apiCall('GET', '/admin/spots', null, { params }),
   updateAdminSpot: (id, spotData) => apiCall('PUT', `/admin/spots/${id}`, spotData),
+  
+  // Admin Bookings
   getAdminBookings: (params = {}) => apiCall('GET', '/admin/bookings', null, { params }),
+  updateAdminBooking: (id, bookingData) => apiCall('PUT', `/admin/bookings/${id}`, bookingData),
+  
+  // Admin Analytics
+  getAdminAnalytics: (params = {}) => apiCall('GET', '/admin/analytics', null, { params }),
 
-  // Utility endpoints
+  // ===== UTILITY ENDPOINTS =====
   healthCheck: () => apiCall('GET', '/'),
   testDatabase: () => apiCall('GET', '/test-db'),
 
-  // Search and filter endpoints
-  searchSpots: (query) => apiCall('GET', `/spots`, null, { params: { search: query } }),
-  getPopularSpots: (limit = 6) => apiCall('GET', `/spots`, null, { params: { limit, sortBy: 'averageRating', sortOrder: 'desc' } }),
-  getFeaturedSpots: (limit = 6) => apiCall('GET', `/spots`, null, { params: { limit, featured: true } }),
+  // ===== SEARCH AND FILTER ENDPOINTS =====
+  searchSpots: (query, params = {}) => apiCall('GET', `/spots`, null, { 
+    params: { search: query, ...params } 
+  }),
+  getPopularSpots: (limit = 6) => apiCall('GET', `/spots`, null, { 
+    params: { limit, sortBy: 'averageRating', sortOrder: 'desc' } 
+  }),
+  getFeaturedSpots: (limit = 6, params = {}) => apiCall('GET', `/spots`, null, { 
+    params: { limit, featured: true, ...params } 
+  }),
+  getSpotsByLocation: (location, params = {}) => apiCall('GET', `/spots`, null, { 
+    params: { location, ...params } 
+  }),
+  getSpotsByPriceRange: (minPrice, maxPrice, params = {}) => apiCall('GET', `/spots`, null, { 
+    params: { minPrice, maxPrice, ...params } 
+  }),
+  getSpotsByCapacity: (capacity, params = {}) => apiCall('GET', `/spots`, null, { 
+    params: { capacity, ...params } 
+  }),
 
-  // Token management utilities
+  // ===== SPECIALIZED BOOKING METHODS =====
+  checkAvailability: (spotId, checkIn, checkOut) => apiCall('GET', `/spots/${spotId}`, null, {
+    params: { checkIn, checkOut }
+  }),
+  getBookingHistory: (params = {}) => apiCall('GET', '/bookings', null, { 
+    params: { ...params, status: 'COMPLETED' } 
+  }),
+  getPendingBookings: (params = {}) => apiCall('GET', '/bookings', null, { 
+    params: { ...params, status: 'PENDING' } 
+  }),
+  getConfirmedBookings: (params = {}) => apiCall('GET', '/bookings', null, { 
+    params: { ...params, status: 'CONFIRMED' } 
+  }),
+
+  // ===== REVIEW METHODS =====
+  getSpotReviews: (spotId, params = {}) => apiCall('GET', `/spots/${spotId}`, null, { params }),
+  canReviewSpot: (spotId) => apiCall('GET', `/spots/${spotId}`),
+
+  // ===== PAYMENT METHODS =====
+  processPayment: (bookingId, paymentData) => apiCall('PUT', `/bookings/${bookingId}/payment`, {
+    paymentStatus: 'PAID',
+    ...paymentData
+  }),
+  refundPayment: (bookingId, refundData) => apiCall('PUT', `/bookings/${bookingId}/payment`, {
+    paymentStatus: 'REFUNDED',
+    ...refundData
+  }),
+
+  // ===== OWNER SPECIFIC METHODS =====
+  approveBooking: (bookingId, notes = '') => apiCall('PUT', `/owners/bookings/${bookingId}`, {
+    status: 'CONFIRMED',
+    notes
+  }),
+  rejectBooking: (bookingId, notes = '') => apiCall('PUT', `/owners/bookings/${bookingId}`, {
+    status: 'CANCELLED',
+    notes
+  }),
+
+  // ===== ANALYTICS AND REPORTING =====
+  getBookingAnalytics: (period = '30days') => apiCall('GET', '/admin/analytics', null, {
+    params: { period }
+  }),
+  getRevenueReport: (startDate, endDate) => apiCall('GET', '/admin/analytics', null, {
+    params: { period: 'custom', startDate, endDate }
+  }),
+
+  // ===== FILE UPLOAD UTILITIES =====
+  uploadImage: (file, type = 'spot') => {
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('type', type)
+    
+    return apiCall('POST', '/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  },
+
+  // ===== TOKEN MANAGEMENT UTILITIES =====
   setAuthToken,
   clearAuthToken,
   
@@ -160,6 +251,36 @@ export default {
   // Check if user is authenticated
   isAuthenticated: () => !!localStorage.getItem('token'),
 
+  // ===== VALIDATION UTILITIES =====
+  validateEmail: (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  },
+  
+  validatePhone: (phone) => {
+    const phoneRegex = /^[+]?[1-9][\d]{0,15}$/
+    return phoneRegex.test(phone.replace(/[\s\-()]/g, ''))
+  },
+  
+  validatePassword: (password) => {
+    return password && password.length >= 6
+  },
+
+  // ===== ERROR HANDLING UTILITIES =====
+  handleApiError: (error) => {
+    if (error.response?.data?.message) {
+      return error.response.data.message
+    } else if (error.message) {
+      return error.message
+    } else {
+      return 'An unexpected error occurred'
+    }
+  },
+
+  // ===== AXIOS INSTANCE =====
   // Axios instance for direct access if needed
-  instance: api
+  instance: api,
+  
+  // Raw axios for custom requests
+  axios: api
 }

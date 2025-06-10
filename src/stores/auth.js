@@ -6,7 +6,8 @@ export const useAuthStore = defineStore('auth', {
     user: null,
     token: localStorage.getItem('token'),
     isAuthenticated: false,
-    loading: false
+    loading: false,
+    verificationSent: false
   }),
 
   getters: {
@@ -33,6 +34,7 @@ export const useAuthStore = defineStore('auth', {
       return state.isAuthenticated && roles.includes(state.user?.role)
     },
     
+    // User display information
     userFullName: (state) => {
       if (!state.user) return ''
       return `${state.user.firstName} ${state.user.lastName}`.trim()
@@ -43,6 +45,58 @@ export const useAuthStore = defineStore('auth', {
       const first = state.user.firstName?.charAt(0) || ''
       const last = state.user.lastName?.charAt(0) || ''
       return `${first}${last}`.toUpperCase()
+    },
+
+    // User status getters
+    isVerified: (state) => {
+      return state.isAuthenticated && state.user?.isVerified
+    },
+
+    isActive: (state) => {
+      return state.isAuthenticated && state.user?.isActive
+    },
+
+    // User profile completion
+    profileCompleteness: (state) => {
+      if (!state.user) return 0
+      
+      let completed = 0
+      const fields = ['firstName', 'lastName', 'email', 'phone', 'avatar']
+      
+      fields.forEach(field => {
+        if (state.user[field] && state.user[field].trim()) {
+          completed++
+        }
+      })
+      
+      return Math.round((completed / fields.length) * 100)
+    },
+
+    // Check if profile needs completion
+    needsProfileCompletion: (state) => {
+      return state.profileCompleteness < 60
+    },
+
+    // User avatar or initials
+    userAvatar: (state) => {
+      return state.user?.avatar || null
+    },
+
+    // Formatted user info for display
+    userDisplayInfo: (state) => {
+      if (!state.user) return null
+      
+      return {
+        name: state.userFullName,
+        initials: state.userInitials,
+        email: state.user.email,
+        phone: state.user.phone,
+        avatar: state.user.avatar,
+        role: state.user.role,
+        isVerified: state.user.isVerified,
+        isActive: state.user.isActive,
+        memberSince: state.user.createdAt
+      }
     }
   },
 
@@ -97,6 +151,27 @@ export const useAuthStore = defineStore('auth', {
       
       try {
         console.log('Attempting registration for:', userData.email)
+        
+        // Validate required fields
+        if (!userData.firstName || !userData.lastName || !userData.email || !userData.password) {
+          throw new Error('All required fields must be provided')
+        }
+        
+        // Validate email format
+        if (!api.validateEmail(userData.email)) {
+          throw new Error('Please provide a valid email address')
+        }
+        
+        // Validate password strength
+        if (!api.validatePassword(userData.password)) {
+          throw new Error('Password must be at least 6 characters long')
+        }
+        
+        // Validate phone if provided
+        if (userData.phone && !api.validatePhone(userData.phone)) {
+          throw new Error('Please provide a valid phone number')
+        }
+        
         const response = await api.register(userData)
         
         console.log('Registration response:', response.data)
@@ -183,6 +258,19 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true
       
       try {
+        // Validate profile data
+        if (profileData.firstName && profileData.firstName.trim().length < 2) {
+          throw new Error('First name must be at least 2 characters long')
+        }
+        
+        if (profileData.lastName && profileData.lastName.trim().length < 2) {
+          throw new Error('Last name must be at least 2 characters long')
+        }
+        
+        if (profileData.phone && !api.validatePhone(profileData.phone)) {
+          throw new Error('Please provide a valid phone number')
+        }
+        
         const response = await api.updateProfile(profileData)
         
         if (response.data && response.data.user) {
@@ -197,6 +285,61 @@ export const useAuthStore = defineStore('auth', {
         const errorMessage = error.response?.data?.message || 
                            error.message || 
                            'Failed to update profile.'
+        
+        return { success: false, error: errorMessage }
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async requestVerification() {
+      this.loading = true
+      
+      try {
+        const response = await api.requestVerification()
+        
+        this.verificationSent = true
+        
+        return { 
+          success: true, 
+          message: response.data.message || 'Verification email sent successfully' 
+        }
+      } catch (error) {
+        console.error('Request verification error:', error)
+        
+        const errorMessage = error.response?.data?.message || 
+                           error.message || 
+                           'Failed to send verification email.'
+        
+        return { success: false, error: errorMessage }
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async deleteAccount(password, reason = '') {
+      this.loading = true
+      
+      try {
+        if (!password) {
+          throw new Error('Password is required to delete account')
+        }
+        
+        const response = await api.deleteAccount({ password, reason })
+        
+        // Clear auth after successful deletion
+        this.clearAuth()
+        
+        return { 
+          success: true, 
+          message: response.data.message || 'Account deleted successfully' 
+        }
+      } catch (error) {
+        console.error('Delete account error:', error)
+        
+        const errorMessage = error.response?.data?.message || 
+                           error.message || 
+                           'Failed to delete account.'
         
         return { success: false, error: errorMessage }
       } finally {
@@ -219,6 +362,7 @@ export const useAuthStore = defineStore('auth', {
       this.user = null
       this.token = null
       this.isAuthenticated = false
+      this.verificationSent = false
       
       // Remove token from localStorage
       localStorage.removeItem('token')
@@ -275,6 +419,16 @@ export const useAuthStore = defineStore('auth', {
         return false
       }
       
+      // Check if account is active
+      if (routeMeta.requiresActive && !this.isActive) {
+        return false
+      }
+      
+      // Check if account is verified
+      if (routeMeta.requiresVerified && !this.isVerified) {
+        return false
+      }
+      
       return true
     },
 
@@ -293,6 +447,50 @@ export const useAuthStore = defineStore('auth', {
       }
       
       return '/profile'
+    },
+
+    // Get user permissions
+    getUserPermissions() {
+      if (!this.isAuthenticated) {
+        return []
+      }
+      
+      const permissions = ['read:profile', 'update:profile']
+      
+      if (this.isUser || this.isOwner || this.isAdmin) {
+        permissions.push('create:booking', 'read:bookings', 'cancel:booking', 'create:review')
+      }
+      
+      if (this.isOwner || this.isAdmin) {
+        permissions.push(
+          'create:spot', 'read:spots', 'update:spot', 'delete:spot',
+          'read:owner_bookings', 'update:booking_status'
+        )
+      }
+      
+      if (this.isAdmin) {
+        permissions.push(
+          'read:all_users', 'update:user', 'delete:user',
+          'read:all_spots', 'update:any_spot',
+          'read:all_bookings', 'update:any_booking',
+          'read:analytics'
+        )
+      }
+      
+      return permissions
+    },
+
+    // Check if user has specific permission
+    hasPermission(permission) {
+      return this.getUserPermissions().includes(permission)
+    },
+
+    // Refresh user data
+    async refreshUser() {
+      if (this.isAuthenticated) {
+        return await this.fetchUser()
+      }
+      return false
     }
   }
 })
