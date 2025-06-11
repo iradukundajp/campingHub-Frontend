@@ -1,8 +1,6 @@
 <template>
   <div id="app" class="min-h-screen bg-gray-50">
-    <!-- Global Header for all pages except home -->
-    <Header v-if="!isHomePage" />
-    
+    <Header v-if="!isHomePage" />  
     <!-- Main content -->
     <main>
       <router-view />
