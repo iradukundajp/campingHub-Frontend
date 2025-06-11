@@ -62,11 +62,15 @@
                 class="absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full"
               ></span>
             </router-link>
+            
+            <!-- Host Button with Loading State -->
             <button 
               @click="handleHostClick"
-               :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
-               class="transition-colors duration-300 relative group">
-              Host
+              :disabled="upgradeLoading"
+              :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
+              class="transition-colors duration-300 relative group flex items-center disabled:opacity-50">
+              <span v-if="upgradeLoading" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></span>
+              {{ upgradeLoading ? 'Upgrading...' : 'Host' }}
               <span 
                 :class="scrolled ? 'bg-green-600' : 'bg-green-300'"
                 class="absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full"
@@ -91,7 +95,7 @@
           
           <!-- Authenticated User Menu -->
           <div class="flex items-center space-x-4" v-else>
-            <!-- FIXED: Restored bookings link -->
+            <!-- Bookings link -->
             <router-link 
               to="/bookings"
               :class="scrolled ? 'text-gray-700 hover:text-green-600' : 'text-white/90 hover:text-green-300'"
@@ -99,7 +103,7 @@
               My Bookings
             </router-link>
             
-            <!-- FIXED: Conditional admin/owner links -->
+            <!-- Conditional admin/owner links -->
             <router-link 
               v-if="authStore.isAdmin"
               to="/admin"
@@ -664,6 +668,9 @@ const showLoginPassword = ref(false)
 const showSignupPassword = ref(false)
 const authError = ref('')
 
+// Loading states for upgrade functionality
+const upgradeLoading = ref(false)
+
 // Form data
 const loginForm = ref({
   email: '',
@@ -772,18 +779,159 @@ const getCategoryForSpot = (spot) => {
   return 'Camping'
 }
 
-// FIXED: Handle host click - separate admin and owner routing
-const handleHostClick = () => {
-  if (authStore.isAuthenticated) {
-    if (authStore.isAdmin) {
-      router.push('/admin')
-    } else if (authStore.isOwner) {
-      router.push('/owner')
-    } else {
-      alert('Contact us to become a camping spot owner!')
-    }
-  } else {
+// Enhanced Host Button Handler
+const handleHostClick = async () => {
+  // First, ensure we have the latest auth state
+  if (authStore.isAuthenticated && !authStore.user) {
+    await authStore.refreshUser()
+  }
+  
+  // Handle unauthenticated users
+  if (!authStore.isAuthenticated) {
     openSignupModal()
+    return
+  }
+  
+  // Get user role with fallback
+  const userRole = authStore.user?.role
+  
+  if (!userRole) {
+    console.warn('User role is undefined, refreshing auth...')
+    await authStore.refreshUser()
+    
+    // Check again after refresh
+    if (!authStore.user?.role) {
+      alert('There was an issue loading your account information. Please try logging in again.')
+      authStore.logout()
+      return
+    }
+  }
+  
+  // Handle different user roles
+  switch (userRole) {
+    case 'ADMIN':
+      router.push('/admin')
+      break
+      
+    case 'OWNER':
+      router.push('/owner')
+      break
+      
+    case 'USER':
+      await handleUserUpgradeRequest()
+      break
+      
+    default:
+      console.warn('Unknown user role:', userRole)
+      alert('There was an issue with your account role. Please contact support.')
+  }
+}
+
+// Enhanced user upgrade handling
+const handleUserUpgradeRequest = async () => {
+  const confirmUpgrade = confirm(
+    `🏕️ Become a Camping Spot Owner!\n\n` +
+    `✅ Add and manage your own camping spots\n` +
+    `✅ Earn money from bookings\n` +
+    `✅ Access owner dashboard and analytics\n` +
+    `✅ Manage guest bookings and reviews\n\n` +
+    `This upgrade is instant and free!\n\n` +
+    `Would you like to upgrade your account now?`
+  )
+  
+  if (confirmUpgrade) {
+    await upgradeToOwner()
+  } else {
+    // Offer alternative contact option
+    const contactSupport = confirm(
+      `No problem! If you have questions about becoming an owner or need help, would you like our contact information?`
+    )
+    
+    if (contactSupport) {
+      alert(
+        `📧 Contact CampingHub Support:\n\n` +
+        `Email: support@campinghub.be\n` +
+        `Phone: +32 123 456 789\n` +
+        `Hours: Monday-Friday 9AM-6PM CET\n\n` +
+        `We're here to help! 😊`
+      )
+    }
+  }
+}
+
+// Function to upgrade user to owner
+const upgradeToOwner = async () => {
+  upgradeLoading.value = true
+  
+  try {
+    // Make API call to upgrade user role using the new endpoint
+    const response = await api.upgradeToOwner()
+    
+    if (response.data?.user) {
+      // Update the auth store with new user data
+      authStore.user = response.data.user
+      
+      // Wait a bit for the store to update
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Verify the role was updated
+      if (authStore.user.role === 'OWNER') {
+        // Show success message with new permissions
+        const permissions = response.data.newPermissions || [
+          'Create and manage camping spots',
+          'Receive and manage bookings', 
+          'Access owner dashboard',
+          'View booking analytics'
+        ]
+        
+        alert(
+          `🎉 Congratulations! You are now a camping spot owner!\n\n` +
+          `Your new permissions include:\n` +
+          permissions.map(p => `• ${p}`).join('\n') + '\n\n' +
+          `You will be redirected to your owner dashboard now.`
+        )
+        
+        // Redirect to owner dashboard after a short delay
+        setTimeout(() => {
+          router.push('/owner')
+        }, 2000)
+      } else {
+        throw new Error('Role update verification failed')
+      }
+    } else {
+      throw new Error('Invalid response from server')
+    }
+    
+  } catch (error) {
+    console.error('Upgrade failed:', error)
+    
+    let errorMessage = 'Failed to upgrade your account. '
+    
+    if (error.response?.status === 403) {
+      errorMessage += 'You may not have permission to upgrade. Please contact support.'
+    } else if (error.response?.status === 400) {
+      const responseMessage = error.response?.data?.message || ''
+      if (responseMessage.includes('already an owner')) {
+        errorMessage = 'Your account is already upgraded to owner status!'
+        // Redirect to owner dashboard
+        setTimeout(() => {
+          router.push('/owner')
+        }, 1000)
+      } else {
+        errorMessage += 'Invalid upgrade request. Please try again or contact support.'
+      }
+    } else if (error.response?.status === 404) {
+      errorMessage += 'Your account was not found. Please log in again.'
+      authStore.logout()
+    } else if (error.response?.status >= 500) {
+      errorMessage += 'Server error. Please try again later or contact support.'
+    } else {
+      errorMessage += 'Please try again or contact support if the problem persists.'
+    }
+    
+    alert(errorMessage)
+  } finally {
+    upgradeLoading.value = false
   }
 }
 
@@ -965,7 +1113,6 @@ const focusField = (field) => {
     guests: guestsInput
   }
   
-  // Focus the specific input using template refs
   const inputRef = inputRefs[field]
   if (inputRef && inputRef.value) {
     inputRef.value.focus()
@@ -991,7 +1138,6 @@ const handleSearch = () => {
 
   isSearching.value = true
   
-  // Build search query
   const query = {}
   if (searchData.value.location) query.search = searchData.value.location
   if (searchData.value.checkin) query.checkIn = searchData.value.checkin

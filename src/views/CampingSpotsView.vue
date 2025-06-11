@@ -37,6 +37,29 @@
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-24">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Filters</h3>
             
+            <!-- FIXED: Added Date Filters -->
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Check-in Date</label>
+              <input
+                v-model="filters.checkIn"
+                type="date"
+                :min="minDate"
+                @change="applyFilters"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              >
+            </div>
+
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Check-out Date</label>
+              <input
+                v-model="filters.checkOut"
+                type="date"
+                :min="filters.checkIn || minDate"
+                @change="applyFilters"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              >
+            </div>
+            
             <!-- Location Filter -->
             <div class="mb-6">
               <label class="block text-sm font-medium text-gray-700 mb-2">Location</label>
@@ -158,6 +181,9 @@
           <div class="flex items-center justify-between mb-6">
             <div class="text-sm text-gray-600">
               Showing {{ spots.length }} of {{ totalSpots }} spots
+              <span v-if="filters.checkIn && filters.checkOut" class="ml-2 text-green-600">
+                for {{ formatDate(filters.checkIn) }} - {{ formatDate(filters.checkOut) }}
+              </span>
             </div>
             
             <!-- View Toggle -->
@@ -256,7 +282,7 @@
                   
                   <div class="flex items-center justify-between">
                     <div class="text-lg">
-                      <span class="font-bold text-gray-900">${{ formatPrice(spot.price) }}</span>
+                      <span class="font-bold text-gray-900">€{{ formatPrice(spot.price) }}</span>
                       <span class="text-gray-600 text-sm"> / night</span>
                     </div>
                     <span 
@@ -302,7 +328,7 @@
                     
                     <div class="flex items-center justify-between">
                       <div class="text-lg">
-                        <span class="font-bold text-gray-900">${{ formatPrice(spot.price) }}</span>
+                        <span class="font-bold text-gray-900">€{{ formatPrice(spot.price) }}</span>
                         <span class="text-gray-600 text-sm"> / night</span>
                       </div>
                       <button 
@@ -385,7 +411,9 @@ const filters = ref({
   minPrice: 0,
   maxPrice: 100,
   capacity: '',
-  amenities: []
+  amenities: [],
+  checkIn: '',    // FIXED: Added date filters
+  checkOut: ''    // FIXED: Added date filters
 })
 
 const sortBy = ref('createdAt,desc')
@@ -401,6 +429,10 @@ const popularAmenities = [
   'Campfire Area'
 ]
 
+const minDate = computed(() => {
+  return new Date().toISOString().split('T')[0]
+})
+
 const visiblePages = computed(() => {
   const pages = []
   const start = Math.max(1, currentPage.value - 2)
@@ -413,17 +445,16 @@ const visiblePages = computed(() => {
   return pages
 })
 
-let searchTimeout = null
-const debouncedSearch = () => {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    currentPage.value = 1
-    fetchSpots()
-  }, 500)
-}
-
 const formatPrice = (price) => {
   return parseFloat(price).toFixed(2)
+}
+
+const formatDate = (date) => {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
 }
 
 const getSpotImage = (spot) => {
@@ -447,6 +478,15 @@ const viewSpot = (spotId) => {
   router.push(`/spots/${spotId}`)
 }
 
+let searchTimeout = null
+const debouncedSearch = () => {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    currentPage.value = 1
+    fetchSpots()
+  }, 500)
+}
+
 const fetchSpots = async () => {
   try {
     loading.value = true
@@ -466,6 +506,10 @@ const fetchSpots = async () => {
     if (filters.value.minPrice > 0) params.minPrice = filters.value.minPrice
     if (filters.value.maxPrice < 100) params.maxPrice = filters.value.maxPrice
     if (filters.value.capacity) params.capacity = filters.value.capacity
+    
+    // FIXED: Add date filters to API call
+    if (filters.value.checkIn) params.checkIn = filters.value.checkIn
+    if (filters.value.checkOut) params.checkOut = filters.value.checkOut
 
     // Add sorting
     const [sortField, sortOrder] = sortBy.value.split(',')
@@ -504,7 +548,9 @@ const clearFilters = () => {
     minPrice: 0,
     maxPrice: 100,
     capacity: '',
-    amenities: []
+    amenities: [],
+    checkIn: '',    // FIXED: Reset date filters
+    checkOut: ''    // FIXED: Reset date filters
   }
   quickSearch.value = ''
   sortBy.value = 'createdAt,desc'
@@ -520,11 +566,15 @@ const goToPage = (page) => {
   }
 }
 
-// Initialize from route query
+// FIXED: Initialize from route query including dates
 onMounted(() => {
   if (route.query.search) quickSearch.value = route.query.search
   if (route.query.location) filters.value.location = route.query.location
   if (route.query.capacity) filters.value.capacity = route.query.capacity
+  
+  // FIXED: Handle checkIn and checkOut from query params
+  if (route.query.checkIn) filters.value.checkIn = route.query.checkIn
+  if (route.query.checkOut) filters.value.checkOut = route.query.checkOut
   
   fetchSpots()
 })
@@ -534,6 +584,10 @@ watch(() => route.query, (newQuery) => {
   if (newQuery.search !== undefined) quickSearch.value = newQuery.search || ''
   if (newQuery.location !== undefined) filters.value.location = newQuery.location || ''
   if (newQuery.capacity !== undefined) filters.value.capacity = newQuery.capacity || ''
+  
+  // FIXED: Watch for date changes in query
+  if (newQuery.checkIn !== undefined) filters.value.checkIn = newQuery.checkIn || ''
+  if (newQuery.checkOut !== undefined) filters.value.checkOut = newQuery.checkOut || ''
   
   fetchSpots()
 })

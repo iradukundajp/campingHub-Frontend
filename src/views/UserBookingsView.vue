@@ -69,7 +69,7 @@
               <!-- Spot Image -->
               <div class="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
                 <img 
-                  :src="booking.spot.images?.[0] || 'https://images.unsplash.com/photo-1504851149312-7a075b496cc7?w=200'"
+                  :src="getSpotImage(booking.spot)"
                   :alt="booking.spot.title"
                   class="w-full h-full object-cover"
                 >
@@ -118,14 +118,14 @@
                         :class="getStatusClasses(booking.status)"
                         class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                       >
-                        {{ booking.status }}
+                        {{ formatStatus(booking.status) }}
                       </span>
                     </div>
                     <div class="text-lg font-semibold text-gray-900">
-                      ${{ parseFloat(booking.totalPrice).toFixed(2) }}
+                      €{{ parseFloat(booking.totalPrice).toFixed(2) }}
                     </div>
                     <div class="text-xs text-gray-500">
-                      ${{ booking.pricePerNight.toFixed(2) }} / night
+                      €{{ (booking.totalPrice / booking.nights).toFixed(2) }} / night
                     </div>
                   </div>
                 </div>
@@ -155,6 +155,14 @@
                     >
                       Write Review
                     </button>
+                    
+                    <router-link 
+                      :to="`/spots/${booking.spot.id}`"
+                      v-if="canRebook(booking)"
+                      class="text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
+                    >
+                      Book Again
+                    </router-link>
                   </div>
 
                   <div class="text-xs text-gray-500">
@@ -281,8 +289,24 @@ const getStatusClasses = (status) => {
       return 'bg-blue-100 text-blue-800'
     case 'CANCELLED':
       return 'bg-red-100 text-red-800'
+    case 'CHECKED_IN':
+      return 'bg-purple-100 text-purple-800'
+    case 'CHECKED_OUT':
+      return 'bg-gray-100 text-gray-800'
     default:
       return 'bg-gray-100 text-gray-800'
+  }
+}
+
+const formatStatus = (status) => {
+  switch (status.toUpperCase()) {
+    case 'CONFIRMED': return 'Confirmed'
+    case 'PENDING': return 'Pending'
+    case 'COMPLETED': return 'Completed'
+    case 'CANCELLED': return 'Cancelled'
+    case 'CHECKED_IN': return 'Checked In'
+    case 'CHECKED_OUT': return 'Checked Out'
+    default: return status
   }
 }
 
@@ -294,6 +318,13 @@ const formatDate = (date) => {
   })
 }
 
+const getSpotImage = (spot) => {
+  if (spot.images && spot.images.length > 0) {
+    return spot.images[0]
+  }
+  return 'https://images.unsplash.com/photo-1504851149312-7a075b496cc7?w=200'
+}
+
 const canCancel = (booking) => {
   const now = new Date()
   const checkIn = new Date(booking.checkIn)
@@ -303,7 +334,11 @@ const canCancel = (booking) => {
 }
 
 const canReview = (booking) => {
-  return booking.status === 'COMPLETED'
+  return booking.status === 'COMPLETED' || booking.status === 'CHECKED_OUT'
+}
+
+const canRebook = (booking) => {
+  return booking.status === 'COMPLETED' || booking.status === 'CANCELLED'
 }
 
 const openCancelModal = (booking) => {
@@ -324,9 +359,7 @@ const confirmCancel = async () => {
   cancelLoading.value = true
   
   try {
-    await api.cancelBooking(selectedBooking.value.id, {
-      reason: cancelReason.value.trim() || null
-    })
+    await api.cancelBooking(selectedBooking.value.id, cancelReason.value.trim() || null)
     
     // Update booking status locally
     const bookingIndex = bookings.value.findIndex(b => b.id === selectedBooking.value.id)
@@ -336,6 +369,7 @@ const confirmCancel = async () => {
     
     closeCancelModal()
   } catch (err) {
+    console.error('Error cancelling booking:', err)
     error.value = err.response?.data?.message || 'Failed to cancel booking'
   } finally {
     cancelLoading.value = false
@@ -345,6 +379,7 @@ const confirmCancel = async () => {
 const openReviewModal = (booking) => {
   // TODO: Implement review modal
   console.log('Open review modal for booking:', booking.id)
+  alert('Review functionality coming soon!')
 }
 
 const fetchBookings = async () => {
@@ -352,10 +387,24 @@ const fetchBookings = async () => {
     loading.value = true
     error.value = ''
     
+    console.log('Fetching user bookings...')
     const response = await api.getUserBookings()
-    bookings.value = response.data.bookings || []
+    console.log('Bookings response:', response.data)
+    
+    // Calculate nights for each booking
+    bookings.value = (response.data.bookings || []).map(booking => {
+      const checkIn = new Date(booking.checkIn)
+      const checkOut = new Date(booking.checkOut)
+      const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24))
+      
+      return {
+        ...booking,
+        nights
+      }
+    })
     
   } catch (err) {
+    console.error('Error fetching bookings:', err)
     error.value = err.response?.data?.message || 'Failed to load bookings'
   } finally {
     loading.value = false

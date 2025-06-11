@@ -212,8 +212,8 @@ const canBook = computed(() => {
 })
 
 const showAuthModal = () => {
-  // Navigate to home page where auth modal can be opened
-  router.push('/')
+  // Navigate to login page
+  router.push('/login')
 }
 
 const validateDates = async () => {

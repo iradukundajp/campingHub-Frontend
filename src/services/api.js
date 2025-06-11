@@ -109,6 +109,10 @@ export default {
   // ===== USER ENDPOINTS =====
   getProfile: () => apiCall('GET', '/users/profile'),
   updateUserProfile: (profileData) => apiCall('PUT', '/users/profile', profileData),
+  
+  // 🆕 FIXED: Upgrade to owner endpoint - Send empty object to avoid JSON parsing error
+  upgradeToOwner: () => apiCall('PUT', '/users/upgrade-to-owner', {}),
+  
   getUserBookings: (params = {}) => apiCall('GET', '/users/bookings', null, { params }),
   getUserReviews: (params = {}) => apiCall('GET', '/users/reviews', null, { params }),
   getUserStats: () => apiCall('GET', '/users/stats'),
