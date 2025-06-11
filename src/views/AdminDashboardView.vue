@@ -1,50 +1,5 @@
 <template>
   <div class="min-h-screen bg-gray-50">
-    <!-- Navigation -->
-    <nav class="bg-white shadow-sm border-b border-gray-200">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center h-16">
-          <!-- Logo -->
-          <div class="flex items-center space-x-3 cursor-pointer" @click="$router.push('/')">
-            <div class="text-2xl">🏕️</div>
-            <span class="text-xl font-bold bg-gradient-to-r from-green-600 to-teal-600 bg-clip-text text-transparent">
-              CampingHub
-            </span>
-            <span class="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-              Admin
-            </span>
-          </div>
-          
-          <!-- User Menu -->
-          <div class="flex items-center space-x-4">
-            <router-link 
-              to="/"
-              class="text-gray-600 hover:text-gray-900 transition-colors duration-200">
-              Back to Site
-            </router-link>
-            <div class="flex items-center space-x-2">
-              <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                <span class="text-purple-600 font-medium text-sm">
-                  {{ authStore.user?.firstName?.charAt(0) }}{{ authStore.user?.lastName?.charAt(0) }}
-                </span>
-              </div>
-              <div class="hidden md:block">
-                <p class="text-sm font-medium text-gray-900">{{ authStore.user?.firstName }} {{ authStore.user?.lastName }}</p>
-                <p class="text-xs text-gray-500">Administrator</p>
-              </div>
-            </div>
-            <button 
-              @click="authStore.logout"
-              class="text-gray-600 hover:text-red-600 transition-colors duration-200">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    </nav>
-
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Header -->
       <div class="mb-8">
